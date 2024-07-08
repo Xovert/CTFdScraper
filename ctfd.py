@@ -222,12 +222,17 @@ class CTFdScrape(object):
             log.exception('%s'%(e))
       q.task_done()
     return True
+
+  def __clean(self, name):
+    name = re.sub(r"[\s]+", "-", text.strip().lower())
+    name = re.sub(r"[-]{2,}", "-", name)
+    return text
       
   def __populate(self, q):
     while not q.empty():
       vals = self.chals[q.get()]
       ns   = Namespace(**vals)
-      path = os.path.join(self.path, ns.category, ns.name)
+      path = os.path.join(self.path, self.__clean(ns.category), self.__clean(ns.name))
       if not os.path.exists(path):
         os.makedirs(path)
 
@@ -288,7 +293,7 @@ class CTFdScrape(object):
         sys.exit()
       sp.succeed(' Login Success')
     self.__manageVersion()
-    path = os.path.join(self.basepath, self.title, 'challs.json')
+    path = os.path.join(self.basepath, self.__clean(self.title), 'challs.json')
     if os.path.exists(path):
       self.config = path
     if self.config:
@@ -315,7 +320,7 @@ class CTFdScrape(object):
     return True
 
   def createArchive(self):
-    orig_path  = os.getcwd()
+    orig_path  = os.path.expanduser("~")
     self.path  = os.path.join(orig_path, self.basepath, self.title)
     self.entry = dict(url=self.url, title=self.title, data={})
     if not os.path.exists(self.path):
