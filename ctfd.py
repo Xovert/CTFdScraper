@@ -23,6 +23,7 @@ class CTFdScrape(object):
   def __init__(self, args):
     self.auth      = dict(name=args.user, password=args.passwd)
     self.url       = self.__parseUrl(args.url)
+    self.token     = args.token
     self.worker    = args.worker
     self.scheme    = args.scheme
     self.override  = args.override
@@ -59,6 +60,11 @@ class CTFdScrape(object):
       proxy = {'http'  : 'http://%s'%(self.proxies),
                'https' : 'https://%s'%(self.proxies)}
       self.ses.proxies.update(proxy)
+    if self.token:
+      self.ses.headers.update({
+        'Content-Type'  : 'application/json',
+        'Authorization' : f'Token {self.token}'
+      })
 
     # CTFd Endpoint
     self.ch_url  = self.url + '/api/v1/challenges'
@@ -85,8 +91,11 @@ class CTFdScrape(object):
       nonce = soup.find('input', {'name':'nonce'}).get('value')
       self.auth['nonce'] = nonce
       self.title = soup.title.string
-      resp  = self.ses.post(self.lg_url, data=self.auth)
-      return 'incorrect' not in resp.text
+      if not self.token:
+        self.ses.post(self.lg_url, data=self.auth)
+      # self.__manageVersion() #manage the version early to verify
+      resp_status = self.ses.get(self.ch_url).json()
+      return resp_status['success']
     except Exception as e:
       log.error('%s'%(e))
 
@@ -142,7 +151,7 @@ class CTFdScrape(object):
     while not q.empty():
       id = q.get()
       ch = self.chals[id]
-      if self.auth['name'] and self.auth['password']:
+      if self.token or (self.auth['name'] and self.auth['password']):
         if self.version != 'v.1.2.0':
           self.chals[id] = self.__getChallById(id)
         else:
@@ -224,9 +233,9 @@ class CTFdScrape(object):
     return True
 
   def __clean(self, name):
-    name = re.sub(r"[\s]+", "-", text.strip().lower())
+    name = re.sub(r"[\s]+", "-", name.strip().lower())
     name = re.sub(r"[-]{2,}", "-", name)
-    return text
+    return name
       
   def __populate(self, q):
     while not q.empty():
@@ -280,7 +289,7 @@ class CTFdScrape(object):
 
     for i in range(self.worker):
       worker = Thread(target=action, args=(que, ))
-      worker.setDaemon(True)
+      worker.daemon = True
       worker.start()
     que.join()
     del que
@@ -292,7 +301,7 @@ class CTFdScrape(object):
         sp.fail(' Login Failed :(')
         sys.exit()
       sp.succeed(' Login Success')
-    self.__manageVersion()
+    # self.__manageVersion()
     path = os.path.join(self.basepath, self.__clean(self.title), 'challs.json')
     if os.path.exists(path):
       self.config = path
@@ -321,7 +330,7 @@ class CTFdScrape(object):
 
   def createArchive(self):
     orig_path  = os.path.expanduser("~")
-    self.path  = os.path.join(orig_path, self.basepath, self.title)
+    self.path  = os.path.join(orig_path, self.basepath, self.__clean(self.title))
     self.entry = dict(url=self.url, title=self.title, data={})
     if not os.path.exists(self.path):
       os.makedirs(self.path)
@@ -441,12 +450,13 @@ class Helper(object):
             f.write(chunk)
 def main():
   parser = ArgumentParser(description='Simple CTFd-based scraper for challenges gathering')
+  parser.add_argument('url', nargs='?',  metavar='url', type=str, default='', help='CTFd platform url')
   parser.add_argument('user', nargs='?', metavar='user', type=str, help='Username/email')
   parser.add_argument('passwd', nargs='?', metavar='passwd', type=str, help='Password')
-  parser.add_argument('url', nargs='?',  metavar='url', type=str, default='', help='CTFd platform url')
+  parser.add_argument('-t', '--token', metavar='token', type=str, help='CTFd API Token')
   parser.add_argument('--data', metavar='data', type=str, help='Populate from challs.json')
   parser.add_argument('--proxy', metavar='proxy', type=str, help='Request behind proxy server')
-  parser.add_argument('--path', metavar='path', type=str, help='Target directory, default: CTF', default='CTF')
+  parser.add_argument('--path', metavar='path', type=str, help='Target directory, default: ctf', default='ctf')
   parser.add_argument('--worker',  metavar='worker', type=int, help='Number of threads, default: 10', default=10)
   parser.add_argument('--scheme',  metavar='scheme', type=str, help='URL scheme, default: https', default='https')
   parser.add_argument('--enable-cloud', help='Permit file download from a cloud drive, default=False', action='store_true')
@@ -458,7 +468,7 @@ def main():
   ctf  = CTFdScrape(args)
   
   if args.data or args.url:
-    if args.user and args.passwd:
+    if args.token or (args.user and args.passwd):
       ctf.authenticate()
       ctf.getChallenges()
     else:

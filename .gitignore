@@ -53,3 +53,4 @@ output/
 test/
 static/
 logs/
+venv/
