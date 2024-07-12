@@ -170,14 +170,15 @@ class CTFdScrape(object):
   def __parseData(self, data):
     if data:
       entry = {
-        'id'          : data['id'],
-        'name'        : self.escape.sub('', data['name']),
-        'points'      : data['value'],
-        'description' : data['description'],
-        'files'       : data['files'],
-        'category'    : self.escape.sub('', data['category']),
-        'solves'      : self.__getSolves(data),
-        'hints'       : self.__getHints(data['hints'])
+        'id'              : data['id'],
+        'name'            : self.escape.sub('', data['name']),
+        'points'          : data['value'],
+        'description'     : data['description'],
+        'connection_info' : data['connection_info'],
+        'files'           : data['files'],
+        'category'        : self.escape.sub('', data['category']),
+        'solves'          : self.__getSolves(data),
+        'hints'           : self.__getHints(data['hints'])
       }
       # print(json.dumps(entry, sort_keys=True, indent=4))
       return entry
@@ -247,6 +248,7 @@ class CTFdScrape(object):
 
       with open(os.path.join(path, 'README.md'),'wb') as f:
         desc  = ns.description.encode('utf-8').strip()
+        conn  = ns.connection_info
         name  = ns.name.encode('utf-8').strip()
         cat   = ns.category.encode('utf-8').strip()
         solve = str(ns.solves).encode('utf-8').strip()
@@ -255,6 +257,8 @@ class CTFdScrape(object):
         cont += '**Category:** %s\n' % (cat)
         cont += '**Solves:** %s\n\n' % (solve)
         cont += '## Description\n>%s\n\n' % (desc)
+        if conn:
+          cont += '# %s\n\n' % (conn.encode('utf-8').strip())
         cont += '**Hint**\n* %s\n\n' % (hint)
         cont += '## Solution\n\n'
         cont += '### Flag\n\n'
